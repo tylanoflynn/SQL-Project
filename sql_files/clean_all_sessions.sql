@@ -6,7 +6,7 @@ SELECT * FROM sales_by_sku LIMIT 10;
 
 WITH clean_all_sessions AS
 (
-	SELECT TRANSLATE(fullvisitorid, '.', '')::VARCHAR(15) fullvisitorid,
+	SELECT TRANSLATE(fullvisitorid, '.', '')::VARCHAR(20) fullvisitorid,
 		channelgrouping,
 		time,
 		country,
@@ -39,8 +39,30 @@ WITH clean_all_sessions AS
 		ecommerceaction_step,
 		ecommerceaction_option
 	FROM all_sessions
+),
+
+clean_analytics AS
+(
+	SELECT visitnumber,
+		visitid,
+		visitstarttime,
+		date,
+		fullvisitorid::NUMERIC::TEXT
+	FROM analytics
 )
 
-SELECT DISTINCT fullvisitorid FROM clean_all_sessions
-SELECT DISTINCT fullvisitorid FROM analytics
+SELECT COUNT(DISTINCT visitid) FROM all_sessions
+UNION
+SELECT COUNT(DISTINCT fullvisitorid) FROM all_sessions
+UNION
+SELECT COUNT(DISTINCT visitid) FROM analytics
+UNION
+SELECT COUNT(DISTINCT fullvisitorid) FROM all_sessions
+
+SELECT acs.fullvisitorid, a.fullvisitorid
+FROM all_sessions acs
+JOIN analytics a
+ON acs.visitid = a.visitid
+WHERE acs.fullvisitorid != a.fullvisitorid
+
 
