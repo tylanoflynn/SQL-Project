@@ -154,8 +154,6 @@ NOTE: These tables only contain cities and countries with visitors that made tra
 
 For the average ordered including when no products were ordered:
 
-NOTE: For brevity I have excluded locations where the average is 0 from the tables.
-
 Country:
 
 country | average
@@ -175,6 +173,8 @@ Seattle|0.00847
 Columbus|0.50000
 Sunnyvale|0.00284
 Atlanta|0.06250
+
+NOTE: For brevity I have excluded locations where the average is 0 from the tables.
 
 Averages including visitors that do not make purchases provide insight into the proportion of visitors from each region that are likely to make purchases.
 
@@ -258,6 +258,7 @@ For cities I decided to stop at the first query since it was clear that the maxi
 
 SQL Queries:
 
+```SQL
 SELECT v.city
 	, (SUM(totaltransactionrevenue)/(SELECT SUM(totaltransactionrevenue) 
 	  FROM transactions) * 100)::NUMERIC(10, 3) revenuepercent
@@ -273,11 +274,12 @@ FROM transactions t
 JOIN sessions s USING(transactionid)
 JOIN visitors v USING(fullvisitorid)
 GROUP BY v.country
+```
 
 
 Answer:
 
-This is only a slight modification of the first question, where I divided the totaltransactionrevneue from each city/country by the sum of the totaltransactionrevenue in transactions, then modified that proportion to a percentage (revenuepercent). I found that the vast majority of revenue (42.661%) came from transactions with no city information available. Standout cities (>5% total revenue) were San Francisco (10.954%), Sunnyvale (6.948%), and Atlanta (5.983%).
+This was only a slight modification of the first question, where I divided the totaltransactionrevneue from each city/country by the sum of the totaltransactionrevenue in transactions, then modified that proportion to a percentage (revenuepercent). I found that the vast majority of revenue (42.661%) came from transactions with no city information available. Standout cities (>5% total revenue) were San Francisco (10.954%), Sunnyvale (6.948%), and Atlanta (5.983%).
 
 For countries I found that 92.108% of revenue came from the United States, 4.215% from Israel, 2.507% from Australia, 1.051% from Canada, and 0.119% from Switzerland.
 
