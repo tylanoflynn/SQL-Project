@@ -103,7 +103,7 @@ CREATE TABLE sales_by_sku (
 
 ```
 
-## Disambiguation and Normalization##
+## Disambiguation and Normalization ##
 
 I first wanted to match values between the all_sessions and analytics tables, and decided to search for a primary key for all_sessions to help faciliate this.
 
@@ -364,16 +364,151 @@ WITH max_cats_all_sessions AS (
 Using the above CTE in the creation of the table yielded the desired result. Ultimately,
 306 out of the 1092 products in the table ended up with categories. The new table did also have 1094 distinct skus instead of the expected 1092. I checked the two duplicates and manually chose the most appropriate category for each. This allowed me to restore sku as the primary key for the table.
 
+Next I sought to clean up the transactions table. As it turned out, transactionid, my desired primary key, was NULL for all but 9 rows of all_sessions. This was fine for most values as it appeared that no transaction had occurred (totaltransactionrevenue, transactions, and product revenue were all NULL). However, I wanted to consider a transaction as having occurred if either totaltransactionrevenue or productrevenue was not NULL. This was true for 81 rows. I also noted that productrevenue was only NOT NULL where totaltransaction revenue was also NOT NULL.
+
+First, I dropped rows of transactions where I considered no transaction to have occurred. Then I altered the transactionid to be a SERIAL PRIMARY KEY. I then recreated the sessions table adding the new trasactionid to the table where relevant.
+
+Next I needed to clean up sessions the sessions table. Ideally, would be able to distinguish between sessions. However, there were over 100 duplicate visitids in the table. This was likely due to multiple entries being made in all_sessions when more than one ecommerceaction/transaction was performed. The other concern was visitids having contradictory fullvisitorids, which should not be possible based on my interpretation of the data. First I checked the values where this was the case
+
+```SQL
+SELECT *
+FROM sessions
+WHERE visitid IN
+(
+	SELECT visitid
+	FROM sessions
+	GROUP BY visitid
+	HAVING COUNT(DISTINCT(visitid, fullvisitorid)) > 1
+)
+ORDER BY visitid
+```
+
+Only a handful of values had this issue. That said, the rows were very unique with the only commonality for most being the date of the visit. I decided that it would not be appropriate to combine these rows as this would remove information from the table. Overall, it appeared that everywhere visitid was duplicated the rows were distinct enough to not be considered duplicate data. The main columns where they differed were time, channelgrouping, type, and pagetitle, and pagepathlevel1. I decided to create a new table called actions that would link via the visitid to sessions and house all of this data, as well the ecommerceaction data as it seemed like a more appropriate place for it. I also added a new column actionid to act as the primary key for actions.
+
+```SQL
+CREATE TABLE actions AS
+(
+	SELECT visitid, time, channelgrouping, type, pagetitle,
+		ecommerceaction_type,
+		ecommerceaction_step,
+		ecommerceaction_option
+	FROM sessions
+)
+
+ALTER TABLE actions ADD COLUMN actionid SERIAL PRIMARY KEY
+```
+
+With these values removed all duplicate rows in the sessions table were duplicate information, so I simply removed them by creating a temporary table containing only distinct values in sessions, then replacing sessions with it.
+
+```SQL
+CREATE TEMPORARY TABLE sessions_temp AS (
+	SELECT DISTINCT * FROM sessions
+);
+```
+
+After doing this, sessions contained only 7 values where visitid was duplicated. These unfortunately were not duplicate rows, and could be distinguished by the fullvisitorid and in one case a transactionid. I did not think I could condense any of these rows so I decided to simply replace visitid with a new serial primary key, sessionid. 
+
+```SQL
+ALTER TABLE sessions_temp ADD COLUMN sessionid SERIAL;
+DROP TABLE sessions;
+CREATE TABLE sessions AS (
+	SELECT * FROM sessions_temp
+);
+```
+
+The last table that needed cleaning up before I started modifying individual data was visitors. The query
+
+```SQL
+SELECT * FROM visitors
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM visitors 
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid
+```
+
+Revealed that the information for each visitor was mainly in agreement except where pageview differed. There were two main cases where fullvisitorid was duplicated in all_sessions: first, where the visitor had multiple sessions in the table. Second, where the same session was recorded multiple times due to different actions being taken in the same session. Where there were multiple values of pageiews I decided that the best course of action was to set pageviews equal to the duplicated value if the values were equal, and sum them if they were not. This unfortunately did make the pageview data much less reliable as if there were two separate sessions with the same amount of pageviews, both sessions one sessions pageviews would not be counted. This will bias pageviews to be much smaller than the probable values.
 
 
+```SQL
+CREATE TEMPORARY TABLE condense_equal_visitors AS
+(
+	SELECT DISTINCT * FROM visitors
+);
 
+CREATE TEMPORARY TABLE condense_equal_visitors_step2 AS
+(
+SELECT fullvisitorid, country, city,
+	SUM(pageviews) OVER (PARTITION BY (fullvisitorid, country, city))
+FROM condense_equal_visitors
+ORDER BY fullvisitorid
+);
 
+DROP TABLE condense_equal_visitors;
 
+CREATE TEMPORARY TABLE condense_equal_visitors AS
+(
+	SELECT DISTINCT * FROM condense_equal_visitors_step2
+);
 
+```
 
+Doing this revealed that there were some visitors which had city identified in one row, while being labeled as "not available in demo dataset" in a different row. Alternatively, there were some values where the same fullvisitorid had contradictory values for country or city. Before repeating the process above, and recondensing the pageviews, I needed to rectify these errors.
+As there were only 64 rows returned by the query
 
+```SQL
+SELECT * FROM condense_equal_visitors
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM condense_equal_visitors
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid;
+```
 
+I decided to manually fix the missing values and contradictions.
 
+This was a mistake.
+
+Note: Where contradictions existed in the country and city information was unavailable, I updated the country to NULL.
+
+After some work, this led to a table where fullvisitorid was uniquely tied to a country/city/totalviews combination. I then set fullvisitorid as the primary key of visitors.
+
+The last step in the normalization process was to establish foreign keys between tables. I used the following setup to link the tables together:
+
+actions: actionid (PK), sessionid (FK, sessions)
+products: sku (PK)
+sales: sku (PK), sku (FK, products)
+sessions: sessionid (PK), transactionid (FK, transactions), fullvisitorid (FK, visitors)
+transactions: transactionid (PK), sku (FK, products, sales)
+visitors: fullvisitorid (PK)
+
+## Altering Improperly Formatted Values ##
+
+### actions ###
+
+The only value that wasn't quite "atomic" in actions was the pagetitle. I opted to leave this as is.
+
+### products ###
+
+There were two distinct types of sku present in the dataset. One was numeric and the other was alphanumeric. This did not create issues for my analysis.
+
+### sales ###
+
+Similar problems with sku in products.
+
+### sessions ###
+
+Timeonsite was not possible for me to convert to an interval without more information but I chose to leave it in as it still has value in comparing one session length to another.
+
+### transactions ###
+
+Transactions contained all of the monetary information. It was clear from the data given (t-shirts don't cost millions of USD) that all data related to currency had been multiplied by 1000000 in the dataset. I simply altered totaltransactionrevenue, productrevenue, and productprice by dividing them by 1000000. I also changed their type to be a numeric value with 2 significant digits.
+
+### visitors ###
+
+No modifications were necessary for the visitors table.
 
 
 

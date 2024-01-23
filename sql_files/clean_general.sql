@@ -214,18 +214,316 @@ CREATE TABLE visitors AS (
 	FROM all_sessions
 )
 
+DROP TABLE sessions;
+
 CREATE TABLE sessions AS (
-	SELECT visitid, fullvisitorid, channelgrouping, date, time, timeonsite,
+	SELECT visitid, fullvisitorid, transactionid, channelgrouping, date, time, timeonsite,
 		sessionqualitydim, type, pagetitle, pagepathlevel1, ecommerceaction_type,
 		ecommerceaction_step, ecommerceaction_option
 	FROM all_sessions
 )
 
+DROP TABLE transactions
 CREATE TABLE transactions AS (
 	SELECT transactionid, visitid, fullvisitorid, sku, 
-	totaltransactionrevenue, transactions, productquantity, 
+	totaltransactionrevenue, currencycode, transactions, productquantity, 
 	productrevenue, productprice
 	FROM all_sessions
+	WHERE totaltransactionrevenue IS NOT NULL
 )
 
+
+
+ALTER TABLE transactions ADD COLUMN transactionid SERIAL PRIMARY KEY
+
+SELECT * FROM transactions
+
+SELECT * FROM transactions WHERE totaltransactionrevenue IS NOT NULL OR productrevenue IS NOT NULL
+
+DROP TABLE sessions;
+CREATE TABLE sessions AS (
+	SELECT a.visitid, a.fullvisitorid, t.transactionid, channelgrouping, date, time, timeonsite,
+		sessionqualitydim, type, pagetitle, pagepathlevel1, ecommerceaction_type,
+		ecommerceaction_step, ecommerceaction_option
+	FROM all_sessions a
+	LEFT JOIN transactions t
+	ON (t.visitid, t.sku) = (a.visitid, a.sku)
+		
+)
+
+SELECT *
+FROM all_sessions a
+LEFT JOIN transactions t
+ON (t.visitid, t.sku) = (a.visitid, a.sku)
+
+SELECT * FROM sessions where transactionid IS NOT NULL
+
+SELECT * FROM sessions
+
+SELECT DISTINCT (visitid, fullvisitorid) FROM sessions
+SELECT * FROM sessions
+
+SELECT * from visitors
+SELECT DISTINCT(fullvisitorid) FROM visitors
+
+
+SELECT *
+FROM sessions
+WHERE visitid IN
+(
+	SELECT visitid
+	FROM sessions
+	GROUP BY visitid
+	HAVING COUNT(visitid) > 1
+)
+ORDER BY visitid
+
+DROP TABLE actions
+CREATE TABLE actions AS
+(
+	SELECT visitid, time, channelgrouping, type, pagetitle,
+		ecommerceaction_type,
+		ecommerceaction_step,
+		ecommerceaction_option
+	FROM sessions
+)
+
+ALTER TABLE actions ADD COLUMN actionid SERIAL PRIMARY 
+
+SELECT * FROM actions
+
+
+DROP TABLE sessions_temp
+CREATE TEMPORARY TABLE sessions_temp AS (
+SELECT DISTINCT * FROM sessions
+)
+
+SELECT * FROM sessions_temp
+
+SELECT *
+FROM sessions_temp
+WHERE visitid IN
+(
+	SELECT visitid
+	FROM sessions_temp
+	GROUP BY visitid
+	HAVING COUNT(visitid) > 1
+)
+ORDER BY visitid
+
+CREATE TEMPORARY TABLE actions_temp AS (
+	SELECT a.actionid,
+		a.visitid,
+		a.time,
+		a.channelgrouping,
+		a.type,
+		a.pagetitle,
+		s.pagepathlevel1,
+		a.ecommerceaction_type,
+		a.ecommerceaction_step,
+		a.ecommerceaction_option
+	FROM actions a
+	JOIN sessions s USING(visitid)
+)
+
+SELECT * FROM actions_temp WHERE pagepathlevel1 IS NULL
+
+DROP TABLE actions;
+CREATE TABLE actions AS
+(
+	SELECT * FROM actions_temp
+)
+
+SELECT * FROM actions WHERE actionid IS NULL
+
+SELECT * FROM 
+
+ALTER TABLE sessions_temp ADD COLUMN sessionid SERIAL
+
+DROP TABLE sessions;
+CREATE TABLE sessions AS (
+	SELECT * FROM sessions_temp
+);
+
+SELECT * FROM visitors
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM visitors 
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid
+
+CREATE TEMPORARY TABLE condense_equal_visitors AS
+(
+	SELECT DISTINCT * FROM visitors
+);
+
+WITH visitors_multiple_pv AS
+(
+SELECT fullvisitorid FROM condense_equal_visitors
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM condense_equal_visitors
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid
+)
+
+DROP TABLE condense_equal_visitors_step2;
+CREATE TEMPORARY TABLE condense_equal_visitors_step2 AS
+(
+SELECT fullvisitorid, country, city,
+	SUM(sum) OVER (PARTITION BY (fullvisitorid, country, city)) totalviews
+FROM condense_equal_visitors
+ORDER BY fullvisitorid
+)
+
+CREATE TEMPORARY TABLE condense_equal_visitors_step3 AS
+(
+	SELECT DISTINCT * FROM condense_equal_visitors_step2
+)
+
+DROP TABLE condense_equal_visitors;
+
+CREATE TEMPORARY TABLE condense_equal_visitors AS
+(
+	SELECT DISTINCT * FROM condense_equal_visitors_step2
+);
+
+SELECT * FROM condense_equal_visitors;
+
+SELECT * FROM condense_equal_visitors
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM condense_equal_visitors
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid
+
 	
+WITH null_citynotset_visitors AS (
+	SELECT fullvisitorid,
+		CASE
+			WHEN city = 'not available in demo dataset' THEN NULL
+			WHEN city = '(not set)' THEN NULL
+			ELSE city
+		END AS city,
+		country,
+		sum
+	FROM condense_equal_visitors
+)
+
+SELECT *
+FROM null_citynotset_visitors n1
+JOIN null_citynotset_visitors n2
+ON n1.city
+
+SELECT * FROM condense_equal_visitors_step3
+WHERE fullvisitorid IN
+(SELECT fullvisitorid 
+ FROM condense_equal_visitors_step3
+ GROUP BY fullvisitorid 
+ HAVING COUNT(fullvisitorid) > 1)
+ORDER BY fullvisitorid
+
+
+UPDATE condense_equal_visitors
+SET (country, city) = (NULL, NULL)
+WHERE fullvisitorid = '7830248036973856928'
+
+UPDATE condense_equal_visitors
+SET country = 
+WHERE fullvisitorid = '312563032232212298'
+
+UPDATE condense_equal_visitors
+SET city = 'Salem'
+WHERE fullvisitorid = '9801276214964695322'
+
+SELECT * FROM condense_equal_visitors_step3
+
+DROP TABLE visitors;
+CREATE TABLE visitors AS (
+	SELECT * FROM condense_equal_visitors_step3
+)
+
+SELECT * FROM visitors
+
+SELECT * FROM sessions
+WHERE sessionid IN
+(
+SELECT sessionid
+FROM sessions
+GROUP BY sessionid
+HAVING COUNT(sessionid) > 1
+)
+ORDER BY sessionid
+
+DROP TABLE actions_temp
+CREATE TEMPORARY TABLE actions_temp AS (
+	SELECT DISTINCT * FROM actions
+)
+
+DROP TABLE actions_temp;
+
+CREATE TEMPORARY TABLE actions_temp AS
+(
+	SELECT a.actionid,
+		a.visitid,
+		s.sessionid,
+		a.time,
+		a.channelgrouping,
+		a.type,
+		a.pagetitle,
+		a.ecommerceaction_type,
+		a.ecommerceaction_step,
+		a.ecommerceaction_option
+	FROM actions a
+	JOIN sessions s USING(visitid)
+)
+
+SELECT * FROM actions
+
+UPDATE actions_temp WHERE
+SELECT * FROM actions_temp WHERE actionid IN
+(
+	SELECT actionid
+	FROM actions_temp
+	GROUP BY actionid
+	HAVING COUNT(actionid) > 1
+)
+
+DROP TABLE actions
+CREATE TABLE actions AS (
+	SELECT * FROM actions_temp
+)
+
+ALTER TABLE actions ADD COLUMN actionid SERIAL PRIMARY KEY
+
+DELETE FROM actions WHERE 
+
+SELECT * FROM sessions WHERE sessionid = 11245 OR sessionid = 4121
+
+DROP TABLE all_session
+
+CREATE TEMPORARY TABLE transaction_temp AS
+(
+	SELECT * FROM transactions
+)
+
+UPDATE transactions 
+SET productprice = productprice / 1000000
+
+
+SELECT * FROM transaction_temp
+
+ALTER TABLE transactions ALTER COLUMN 
+
+SELECT * FROM products WHERE sku = 'GGOENEBQ078999'
+
+SELECT * FROM transactions
+
+ALTER TABLE transactions
+ALTER COLUMN productprice TYPE NUMERIC(10,2)
+
+SELECT * FROM transactions
+
