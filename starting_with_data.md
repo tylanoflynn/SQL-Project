@@ -47,11 +47,13 @@ Answer:
 
 "aveviewsconversion"|"compare_to_overall"
 --------------------|--------------------
-14.8395061728395062|223.8492877361734100
+8.04|75
 
-The average number of views for visitors that made transactions was about 14.84, which is ~224% higher than the average number of views for all visitors.
+The average number of views for visitors that made transactions was about 8.04, which is ~75% higher than the average number of views for all visitors.
 
 Question 3:  What proportion of each channel grouping resulted in a transaction?
+
+NOTE: I calculated these proportions before adding the extra information from analytics. Since only 81 transactions existed before adding the analytics transactions, these proportions are not reliable. However, I did not have time to add the analytics information to the actions table.
 
 SQL Queries:
 
@@ -91,3 +93,8 @@ Answer:
 "Organic Search"|0.25
 "Paid Search"|0.59
 "Referral"|1.24
+
+
+
+
+

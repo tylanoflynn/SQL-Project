@@ -135,9 +135,9 @@ total rows | 15134
 
 From this table it was apparent that the combination of visitid and productsku is sufficient to disambiguate all but 5 rows of all_sessions, with no improvement when fullvisitorid is used. Looking at the 5 duplicate rows, it appears that they are nearly identical, save for the time of purchase and a few other details. I decided that this could indicate that the same visitor purchased the same product at different times during the same visit, so it should not be treated as duplicate data. Instead, I decided to expand the primary key to include the time data. The final primary key that I settled on was (visitid, productsku, time), and this did in fact provide 15134 distinct rows. If future information was added that contained the same values for all 3 columns, I was comfortable with flagging and removing this information as duplicate.
 
-For the analytics table I did not search for an appropriate primary key as all data that appeared to be serialized had many duplicates in the table. Instead, taking into account that it is named analytics and contains a lot of information that is either copied 1-to-1 from other tables or calculated based on values in other tables, I decided that it would be best to treat it like an out-of-place view. That said, there were some pieces of information that were only present in the analytics table. 
+For the analytics table I did not search for an appropriate primary key as all data that appeared to be serialized had many duplicates in the table. Instead, taking into account that it is named analytics and contains a lot of information that is either copied 1-to-1 from other tables or calculated based on values in other tables, I decided that it would be best to treat it like an out-of-place view. That said, there was a lot of information present in the analytics table that was not present elsewhere. I decided that it would be best to divy the information in analytics out into my other tables once I had better segregated and validated them.
 
-To simplify all_sessions and analytics I checked for columns that were mainly NULL values using queries similar to
+To simplify all_sessions I checked for columns that were mainly NULL values using queries similar to
 
 ``` SQL
 SELECT itemquantity
@@ -168,9 +168,9 @@ ON ase.fullvisitorid = a.fullvisitorid
 WHERE ase.visitid = a.visitid
 ```
 
-Also returned 3630 values. Further, I checked the dates of the rows in all_sessions that corresponded to rows in analytics with the same ```fullvisitorid``` and ```visitid``` and found that the dates only differed by one day where they differed at all. This could potentially be explained by the date information for these rows being pulled at different times near midnight, though the opacity of the time stamps in both of the tables makes it difficult to say.
+Also returned 3630 values. Further, I checked the dates of the rows in all_sessions that corresponded to rows in analytics with the same ```fullvisitorid``` and ```visitid``` and found that the dates only differed by one day where they differed at all. This could potentially be explained by the date information for these rows being pulled at different times near midnight, though the opacity of the time stamps in both of the tables made it difficult to say.
 
-Based on this information decided to join the data from analytics to all_sessions using fullvisitorid as the foreign key and check for duplicate columns.
+Based on this information I decided to join the data from analytics to all_sessions using fullvisitorid as the foreign key and check for duplicate columns.
 
 The columns that stuck out to me as potential duplicates of information already contained in all_sessions were visitstarttime, date, channelgrouping, units_sold, pageviews, timeonsite, revenue, and unit_price, so I checked these individually using queries such as
 
@@ -183,8 +183,6 @@ WHERE ase.time != a.visitstarttime
 ```
 
 And comparing them to the total count of distinct fullvisitorids that are common between the two tables. By doing this I found that rows that were identified by the same fullvisitorid and visitid ase.time and a.visitstarttime were different values, where ase.date and a.date differed they differed by 1 day as noted above, and channelgrouping was identical across the tables. I suspected that productquantity in all_sessions might have been equal to units_sold in analytics. However, there were only 15 rows in the join where both of these values were not NULL. Though all of these values were equal, the contents of both values were weighted very heavily towards 1-2. As such, I could not say with confidence that the values were the same. I opted to treat them as though they were identical, while recognizing that the information would not be reliable. pageviews differed for only 8 out of 3661 visitorid, visitid combinations, so I opted to treat these as identical as well. I found similar results for timeonsite, with only 9 out of 2634 values differing. There was no way to reconcile a.revenue and ase.totaltransactionrevenue, ase.productrevenue, or any combination of the two, though this only affected 12 rows as revenue is very sparse in both tables. Finally, unit_price was equal to productprice for about half of rows present in both tables, while the other half were different. I didn't really know what to make of this.
-
-After all of this, I made the decision to ignore information contained in the analytics table, as it was either duplicated, contradictory, or would not be able to be matched up to other tables. Though analytics does contain a great deal more distinct fullvisitorids and visitids than all_sessions, any unique (visitid, fullvisitorid) pairs that were not present in all_sessions would be lacking a lot of critical location and product information. Since none of my questions about the dataset related to the small amount of unique information in analytics (visitnumber, visitstarttime, socialengagementtype, pageviews, or bounces) I felt I could perform my analysis without analytics.
 
 Next, I decided that the tables should be split up/combined into various smaller tables so that each better encapsulated information about only one aspect of the business. First, I renamed sales_report to simply sales and made productsku its primary key. After a bit of digging I found that sales_by_sku contained 462 unique values while sales_report contained 454. All 454 unique values in sales_report had a corresponding row in sales_by_sku, and both tables agreed on the total_ordered. Since this implies that all information save for 8 rows in sales_by_sku is contained in sales_report I simply created a new table, sales, which contained the combination of the information contained in these two tables.
 
@@ -508,7 +506,181 @@ Transactions contained all of the monetary information. It was clear from the da
 
 ### visitors ###
 
-No modifications were necessary for the visitors table.
+For the visitors table the only necessary modification was setting city = NULL wherever the value was "not available in demo dataset" or "(not set)"
+
+## Using the analytics table ##
+
+Before extracting the information contained in analytics and divying it up between the existent tables, I needed to clean up its values as well. Firstly, I removed visitstarttime as a column as it was equal to (or very close to) visitid for all values in the table. Since any value of fullvisitorid contained in analytics that did not match a value in visitors would not contain any location information, I decided to remove these values from the table.
+
+```SQL
+CREATE TEMPORARY TABLE analytics_temp AS (
+	SELECT *
+	FROM analytics
+	WHERE fullvisitorid IN
+	(SELECT DISTINCT fullvisitorid
+	FROM analytics
+	JOIN visitors USING(fullvisitorid))
+);
+
+DROP table analytics;
+
+CREATE TABLE analytics AS (
+	SELECT DISTINCT * FROM analytics_temp
+);
+```
+
+
+This pared the analytics table down from ~4000000 rows to 83210 rows, while guaranteeing that all rows of analytics are distinct and that we would have country and city information for all rows.
+
+I also needed to modify currency values in analytics by dividing them by 1000000, as I did with the other tables.
+
+From here it seemed appropriate to alter the existing tables and add in the information contained in analytics. First, I deleted socialengagementtype, userid, visitnumber, and bounces from analytics as they don't have corresponding values in other tables or are not interesting useful for my analysis. First, where visitid and fullvisitorid matched
+
+Next, I needed to figure out which values in other tables the values in analytics corresponded to. 
+visitid, date, fullvisitorid, channelgrouping, timeonsite, and pageviews matched by name to their corresponding values in sessions/actions/visitors. I translated units_sold to productquantity, revenue to totaltransactionrevenue, and unit_price to productprice in the transactions table.
+
+To start, I wanted to add sessions to the sessions table where they did not already exist, and merge values where they did. I identified sessions that did not already exist in the table using
+
+``` SQL
+SELECT *
+FROM analytics a
+LEFT JOIN sessions s USING(visitid, fullvisitorid)
+WHERE (s.visitid, s.fullvisitorid) IS NULL
+```
+
+And found that there were 36962 such values. To add them to the sessions table I first created a temporary table 'sessions_added' to keep track of the new values added to sessions and added that to the end of sessions.
+
+``` SQL
+CREATE TEMPORARY TABLE sessions_added AS
+(
+SELECT a.visitid,
+	a.fullvisitorid,
+	a.date,
+	a.timeonsite
+FROM analytics a
+WHERE (a.visitid, a.fullvisitorid) IN
+(SELECT a.visitid, a.fullvisitorid
+FROM analytics a
+LEFT JOIN sessions s USING(visitid, fullvisitorid)
+WHERE (s.visitid, s.fullvisitorid) IS NULL)
+);
+
+INSERT INTO sessions (visitid, fullvisitorid, date, timeonsite)
+SELECT * FROM sessions_added
+RETURNING *;
+```
+
+This didn't work because the sessionid was null on the inserted rows. I decided to manually add new sessionids
+
+```SQL
+ALTER TABLE sessions_added ADD COLUMN sessionid SERIAL;
+
+UPDATE sessions_added SET sessionid = sessionid + (SELECT MAX(sessionid) FROM sessions)
+```
+
+and try the above again, inserting the new sessionids as well. This query was successful, with the added sessions starting at sessionid 14564.
+
+Before moving on to adding the corresponding values from these new sessions into the other tables,
+I needed to check for contradictory values as well.
+
+``` SQL
+SELECT s.timeonsite, a.timeonsite
+FROM analytics a
+JOIN sessions s USING(visitid, fullvisitorid)
+WHERE s.timeonsite != a.timeonsite
+```
+
+I found 987 contradictions between the timeonsite given in sessions and the timeonsite given in analytics. I did not know where these contradictions arose from so I decided to not use timeonesite in my analysis.
+
+There were no other values on which the two tables might contradict.
+
+Next I needed to add any transactions corresponding to the added sessions to the transactions table, and match their transactionid in the sessions table. To do so I used:
+
+```SQL
+CREATE TEMPORARY TABLE transactions_added AS (
+SELECT DISTINCT a.visitid
+	, a.fullvisitorid
+	, a.revenue totaltransactionrevenue
+	, a.units_sold productquantity
+	, a.unit_price productprice
+FROM analytics a
+JOIN sessions_added s USING(visitid, fullvisitorid)
+WHERE a.revenue IS NOT NULL OR a.units_sold IS NOT NULL
+);
+
+SELECT * FROM transactions_added;
+```
+
+From this I noticed that some visitid/fullvisitorid combinations had multiple transactions, and 
+there was often a productquantity and productprice while revenue was listed as null. It was clear from the rows that containe productquantity, productprice, and revenue that the revenue column was simply productquantity * productprice * (1 + unknown tax value). I decided to extrapolate the null values of totaltransactionrevenue from this, ignoring tax.
+
+```SQL
+UPDATE transactions_added
+SET totaltransactionrevenue = productquantity * productprice
+WHERE totaltransactionrevenue IS NULL;
+```
+
+And add a transactionid column to the table in the same way that I did with the sessions_added table.
+
+```SQL
+ALTER TABLE transactions_added ADD COLUMN transactionid SERIAL;
+UPDATE transactions_added SET transactionid = transactionid + (SELECT MAX(transactionid) FROM transactions);
+```
+
+I then tacked transactions_added on to the end of the transactions table and linked the new transactions to the new sessions using the transactionid.
+
+```SQL
+INSERT INTO transactions (totaltransactionrevenue, productquantity, productprice, transactionid)
+SELECT totaltransactionrevenue, productquantity, productprice, transactionid FROM transactions_added
+RETURNING *;
+
+CREATE TEMPORARY TABLE sessions_temp AS
+(
+	SELECT visitid, fullvisitorid, t.transactionid, date,
+		timeonsite, sessionqualitydim, sessionid
+	FROM sessions
+	JOIN transactions_added t USING(visitid, fullvisitorid)
+)
+
+```
+This created a new problem. Multiple transactions per unique session meant that duplicate sessions were to be added to the sessions table. Given more time, I wanted to link transactions to individual actions instead of sessions, but a fix that allowed me to still do some basic analysis was dropping the sessions_added from earlier and affixing a new sessions_added based on transactions_ad, with a new sessionid generated.
+
+```
+DELETE FROM sessions WHERE sessionid >= 14564;
+
+DROP TABLE sessions_temp;
+CREATE TEMPORARY TABLE sessions_temp AS
+(
+	SELECT DISTINCT visitid, fullvisitorid, t.transactionid, date,
+		timeonsite
+	FROM sessions_added
+	JOIN transactions_added t USING(visitid, fullvisitorid)
+)
+
+ALTER TABLE sessions_temp ADD COLUMN sessionid SERIAL;
+UPDATE sessions_temp SET sessionid = sessionid + (SELECT MAX(sessionid) FROM sessions);
+
+INSERT INTO sessions (visitid, fullvisitorid, transactionid, date, timeonsite, sessionid)
+SELECT * FROM sessions_temp
+RETURNING *;
+```
+
+This was the end of my data extraction from analytics. In the future, I would like to consider extracting more data and linking it to the actions table.
+
+For now, the last SQL query I executed was:
+
+```SQL
+DROP TABLE analytics;
+```
+
+
+
+
+
+ 
+
+
+
 
 
 
