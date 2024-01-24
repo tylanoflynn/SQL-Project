@@ -482,7 +482,7 @@ GROUP BY v.country
 
 Answer:
 
-This was only a slight modification of the first question, where I divided the totaltransactionrevneue from each city/country by the sum of the totaltransactionrevenue in transactions, then modified that proportion to a percentage (revenuepercent). I found that the vast majority of revenue (46.84764%) came from transactions with no city information available. Standout cities (>5% total revenue) were San Bruno (7.96%), and Sunnyvale (36.85%).
+This was only a slight modification of the first question, where I divided the totaltransactionrevneue from each city/country by the sum of the totaltransactionrevenue in transactions, then modified that proportion to a percentage (revenuepercent). I found that the vast majority of revenue (46.84764%) came from transactions with no city information available. Standout cities (>5% total revenue) were San Bruno (7.96%), and Mountain View with a staggering (36.85%).
 
 For countries I found that 99.487% of revenue came from the United States, while the next largest contributor was Czechia at 0.20%. All other countries countributed less than 0.1% of total revenue.
 

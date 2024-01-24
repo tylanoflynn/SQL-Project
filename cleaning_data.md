@@ -645,7 +645,7 @@ CREATE TEMPORARY TABLE sessions_temp AS
 ```
 This created a new problem. Multiple transactions per unique session meant that duplicate sessions were to be added to the sessions table. Given more time, I wanted to link transactions to individual actions instead of sessions, but a fix that allowed me to still do some basic analysis was dropping the sessions_added from earlier and affixing a new sessions_added based on transactions_ad, with a new sessionid generated.
 
-```
+``` SQL
 DELETE FROM sessions WHERE sessionid >= 14564;
 
 DROP TABLE sessions_temp;
