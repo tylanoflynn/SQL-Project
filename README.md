@@ -17,7 +17,7 @@ The resulting data allowed me to both ask and answer a series of questions, whic
 * A large proportion of all revenue earned $1,145,722.53 (36.851%) came from one city, Mountain View. This was a fairly suspect result given that Mountain View is a relatively small city with a population of 82,376, but could be possible if it is the main area that the ecommerce business actually services, or if very large orders are made from there.
 * After the United States which makes up 99.487% of total revenue, the country that provides the most revenue is Czechia.
 * Visitors that made purchases had 75% more page views than the average.
-* Referrals 42.5% more likely to be converted into sales than the next most likely channel, which was direct. (NOTE: this was only calculated based on the information in all_sessions, not analytics).
+* Referrals were 42.5% more likely to be converted into sales than the next most likely channel, which was direct links. (NOTE: this was only calculated based on the information in all_sessions, not analytics).
 
 ## Challenges 
 
@@ -30,6 +30,7 @@ The resulting data allowed me to both ask and answer a series of questions, whic
 
 ## Future Goals
 
+* Starting with drawing relationships and searching for an appropriate primary key in all of the established tables was a mistake. I would like to start from scratch, combining data in all_sessions and analytics into one large table, then extracting data from that central table to the pre-defined relations. Only then would I define primary/foreign keys on each table.
 * Further normalize the database. I left too much product information in the transactions table instead of moving it to the products table. Actions ended up being a table where I moved information that made sessions harder to interpret instead of a table that contained useful, atomic data on its own. A lot of information was still duplicated.
 * Add data from the analytics table into the actions table. This would also allow me to remove much of the duplicate data that was added to sessions when I extracted it from analytics.
 * Attempt to interpret time/timestamps/time intervals. The way that they were listed in the data was opaque which led to me ignoring them, but time data is very valuable.
