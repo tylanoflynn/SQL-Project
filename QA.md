@@ -1,4 +1,4 @@
-What are your risk areas? Identify and describe them.
+# Risk areas
 
 * Improper data type conversion on import
 * Removing information when cleaning data
@@ -6,8 +6,6 @@ What are your risk areas? Identify and describe them.
 * Importing only useful information from analytics and divying it up appropriately.
 * Joins having the correct number of entries, particularly where I am only interested in sessions that resulted in transactions)
 
-QA Process:
-Describe your QA process and include the SQL queries used to execute it.
 
 # Preimport
 
