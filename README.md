@@ -1,7 +1,7 @@
 # Final-Project-Transforming-and-Analyzing-Data-with-SQL
 
 ## Project/Goals
-The goal of this project is to take a toy dataset with messy values and convert into a normalized relational database managed using PostgreSQL, then answer questions based on that data.
+The goal of this project was to take a toy dataset with messy values and convert it into a normalized relational database managed using PostgreSQL, then answer questions based on that data.
 
 ## Process
 
