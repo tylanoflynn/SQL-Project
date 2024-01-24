@@ -302,7 +302,7 @@ Regex credit: https://stackoverflow.com/questions/1400431/regular-expression-mat
 
 And found that of the 138 sku that are present in all_sessions but missing in products, 59 of them are associated with a product with a near identical name present in products. However, this did not give me sufficient confidence to simply combine the values. In the end, I opted to not add products from all_sessions that were not present in products to products.
 
-To begin adding the other information provided in all_sessions to products I first create a temporary table
+To begin adding the other information provided in all_sessions to products I first created a temporary table
 
 ``` SQL
 CREATE TEMPORARY TABLE products_temp AS (
@@ -426,7 +426,7 @@ WHERE fullvisitorid IN
 ORDER BY fullvisitorid
 ```
 
-Revealed that the information for each visitor was mainly in agreement except where pageview differed. There were two main cases where fullvisitorid was duplicated in all_sessions: first, where the visitor had multiple sessions in the table. Second, where the same session was recorded multiple times due to different actions being taken in the same session. Where there were multiple values of pageiews I decided that the best course of action was to set pageviews equal to the duplicated value if the values were equal, and sum them if they were not. This unfortunately did make the pageview data much less reliable as if there were two separate sessions with the same amount of pageviews, both sessions one sessions pageviews would not be counted. This will bias pageviews to be much smaller than the probable values.
+Revealed that the information for each visitor was mainly in agreement except where pageview differed. There were two main cases where fullvisitorid was duplicated in all_sessions: first, where the visitor had multiple sessions in the table. Second, where the same session was recorded multiple times due to different actions being taken in the same session. Where there were multiple values of pageiews I decided that the best course of action was to set pageviews equal to the duplicated value if the values were equal, and sum them if they were not. This unfortunately did make the pageview data much less reliable as if there were two separate sessions with the same amount of pageviews, one sessions pageviews would not be counted. This biased pageviews to be much smaller than the probable values.
 
 
 ```SQL
@@ -534,7 +534,7 @@ This pared the analytics table down from ~4000000 rows to 83210 rows, while guar
 
 I also needed to modify currency values in analytics by dividing them by 1000000, as I did with the other tables.
 
-From here it seemed appropriate to alter the existing tables and add in the information contained in analytics. First, I deleted socialengagementtype, userid, visitnumber, and bounces from analytics as they don't have corresponding values in other tables or are not interesting useful for my analysis. First, where visitid and fullvisitorid matched
+From here it seemed appropriate to alter the existing tables and add in the information contained in analytics. First, I deleted socialengagementtype, userid, visitnumber, and bounces from analytics as they don't have corresponding values in other tables or are not interesting useful for my analysis.
 
 Next, I needed to figure out which values in other tables the values in analytics corresponded to. 
 visitid, date, fullvisitorid, channelgrouping, timeonsite, and pageviews matched by name to their corresponding values in sessions/actions/visitors. I translated units_sold to productquantity, revenue to totaltransactionrevenue, and unit_price to productprice in the transactions table.
